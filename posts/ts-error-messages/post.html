@@ -1,0 +1,204 @@
+<!--:::{
+  "post_title": "Obtendo a mensagem de erro de um bloco catch com TypeScript",
+  "post_description": "Lidando com erros no TypeScript da maneira certa!",
+  "post_created_at": "Fri May 06 2022 17:15:05 GMT-0300 (Brasilia Standard Time)"
+}:::-->
+
+<style>
+  .language-markup.inline {
+    font-size: 0.7em;
+  }
+</style>
+
+<p><i>Disclaimer:</i> este post é uma tradução <a href="https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript" target="_blank">deste post</a> do blog do Kent C. Dodds</p>
+
+<p>Certo, vamos falar sobre isso aqui:</p>
+
+<pre>
+  <code class="lang-javascript">
+    const reportError = ({message}) => {
+      // send the error to our logging service...
+    }
+    
+    try {
+      throw new Error('Oh no!')
+    } catch (error) {
+      // we'll proceed, but let's report it
+      reportError({message: error.message})
+    }
+  </code>
+</pre>
+
+<p>Tranquilo até aqui? Claro, isso é só JavaScript. Vamos reescrever o trecho acima em TypeScript:</p>
+
+<pre>
+  <code class="lang-javascript">
+    const reportError = ({message}: {message: string}) => {
+      // send the error to our logging service...
+    }
+    
+    try {
+      throw new Error('Oh no!')
+    } catch (error) {
+      // we'll proceed, but let's report it
+      reportError({message: error.message})
+    }
+  </code>
+</pre>
+
+<p>Há algo de errado na chamada de <code class="lang-markup inline">reportError</code>. Especificamente em <code class="lang-markup inline">error.message</code>. 
+  Isso porque (recentemente) o TypeScript tipa nosso <code class="lang-markup inline">error</code> como <code class="lang-markup inline">unknown</code>.
+  E na verdade é exatamente isso que ele é! No mundo dos erros, não há muitas garantias que você pode oferecer quanto aos tipos de erros que serão lançados.
+  De fato, este é o mesmo motivo pelo qual você não pode definir um tipo para o <code class="lang-markup inline">.catch(error => {})</code> de uma promise rejeitada
+  com o generic <code class="lang-markup inline">Promise&ltResolvedValue, NopeYouCantProvideARejectedValueType></code>. De fato, pode ser que nem mesmo um erro esteja 
+  sendo lançado. Pode ser simplesmente qualquer coisa:
+</p>
+
+<pre>
+  <code class="lang-javascript">
+    throw 'What the!?'
+    throw 7
+    throw {wut: 'is this'}
+    throw null
+    throw new Promise(() => {})
+    throw undefined
+  </code>
+</pre>
+
+<p>É sério, você pode lançar qualquer de coisa de qualquer tipo. Então é fácil, certo? Podemos só adicionar uma anotação de tipo no erro para dizer que este código 
+  só vai lançar um erro, certo?
+</p>
+
+<pre>
+  <code class="lang-javascript">
+    try {
+      throw new Error('Oh no!')
+    } catch (error: Error) {
+      // we'll proceed, but let's report it
+      reportError({message: error.message})
+    }
+  </code>
+</pre>
+
+<p>Não tão rápido! Deste modo você vai receber um erro de compilação do TypeScript:</p>
+
+<pre>Catch clause variable type annotation must be 'any' or 'unknown' if specified. ts(1196)</pre>
+
+<p>O motivo aqui é que, mesmo que em nosso código tenhamos a impressão de que não há como lançar qualquer outra coisa, o JavaScript é bem "liberal" e portanto é perfeitamente 
+  possível que uma biblioteca de terceiros faça algo "rebuscado" como um <i>monkey-patching</i> no construtor de <code class="lang-markup inline">Error</code> 
+  para lançar algo diferente:
+</p>
+
+<pre>
+  <code class="lang-javascript">
+    Error = function () {
+      throw 'Flowers'
+    } as any
+  </code>
+</pre>
+
+<p>E o que um programador pode fazer então? O melhor que ele puder! Que tal isso:</p>
+
+<pre>
+  <code class="lang-javascript">
+    try {
+      throw new Error('Oh no!')
+    } catch (error) {
+      let message = 'Unknown Error'
+      if (error instanceof Error) message = error.message
+      // we'll proceed, but let's report it
+      reportError({message})
+    }
+  </code>
+</pre>
+
+There we go! Now TypeScript isn't yelling at us and more importantly we're handling the cases where it really could be something completely unexpected. Maybe we could do even better though:
+<p>E aí está! Agora o TypeScript não reclama mais e, mais importante, estamos tratando os casos onde ele poderia realmente causar algo completamente inesperado. 
+  Mas acho que talvez possamos fazer ainda melhor:</p>
+
+<pre>
+  <code class="lang-javascript">
+    try {
+      throw new Error('Oh no!')
+    } catch (error) {
+      let message
+      if (error instanceof Error) message = error.message
+      else message = String(error)
+      // we'll proceed, but let's report it
+      reportError({message})
+    }
+  </code>
+</pre>
+
+Then we can turn this into a utility for use in all our catch blocks:
+<p>Aqui, se o error não for uma instância de <code class="lang-markup inline">Error</code>, então podemos simplesmente fazer o <i>stringify</i> dele e 
+confiar que o resultado disso nos será útil.</p>
+
+<p>Assim, podemos transformar isso em um utilitário para usarmos em todos os nossos blocos catch</p>
+
+<pre>
+  <code class="lang-javascript">
+    function getErrorMessage(error: unknown) {
+      if (error instanceof Error) return error.message
+      return String(error)
+    }
+    
+    const reportError = ({message}: {message: string}) => {
+      // send the error to our logging service...
+    }
+    
+    try {
+      throw new Error('Oh no!')
+    } catch (error) {
+      // we'll proceed, but let's report it
+      reportError({message: getErrorMessage(error)})
+    }
+  </code>
+</pre>
+
+<p>Isso foi muito útil para mim em vários projetos. Espero que seja para você também!</p>
+
+<p>Atualização: <a href="https://github.com/npirotte" target="_blank">Nicolas</a> deu <a href="https://github.com/kentcdodds/kentcdodds.com/issues/206"target="_blank">uma boa sugestão</a> 
+para situaçoes onde objeto de erro não é realmente um erro. E então <a href="https://discord.com/users/804795652252106762" target="_blank">Jesse</a> também 
+<a href="https://discord.com/channels/715220730605731931/715227739749089281/903649313228480532" target="_blank">sugeriu</a> fazer um <i>stringify</i> do objeto do erro, se possível. 
+As sugestões combinadas ficaram assim:
+</p>
+
+<pre>
+  <code class="lang-javascript">
+    type ErrorWithMessage = {
+      message: string
+    }
+    
+    function isErrorWithMessage(error: unknown): error is ErrorWithMessage {
+      return (
+        typeof error === 'object' &&
+        error !== null &&
+        'message' in error &&
+        typeof (error as Record<string, unknown>).message === 'string'
+      )
+    }
+    
+    function toErrorWithMessage(maybeError: unknown): ErrorWithMessage {
+      if (isErrorWithMessage(maybeError)) return maybeError
+    
+      try {
+        return new Error(JSON.stringify(maybeError))
+      } catch {
+        // fallback in case there's an error stringifying the maybeError
+        // like with circular references for example.
+        return new Error(String(maybeError))
+      }
+    }
+    
+    function getErrorMessage(error: unknown) {
+      return toErrorWithMessage(error).message
+    }
+  </code>
+</pre>
+
+<h3>Conclusão</h3>
+
+<p>Acho que o ponto chave é lembrar que, enquanto o TypeScript tem suas peculiaridades, não descarte um erro de compilação ou um <i>warning</i> do TypeScript só porque você acha que é 
+impossível ou seja qual for o motivo. Na maioria das vezes é plenamente possível que ocorra o inesperado, e o TypeScript faz um grande trabalho lhe forçando a tratar estes casos improváveis... 
+E você provavelmente perceberá que eles não são assim tão improváveis.</p>
