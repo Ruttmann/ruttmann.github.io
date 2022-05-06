@@ -1,0 +1,12 @@
+{
+  "blog_locale": "pt-BR",
+  "blog_title": "Marlon E. Ruttmann",
+  "blog_description": "Web e conteúdo random",
+  "blog_theme": "default",
+  "blog_author": "Marlon E. Ruttmann",
+  "blog_author_url": "https://github.com/Ruttmann",
+  "blog_no_posts_hint": "Sem posts ainda",
+  "blog_posted_by_hint": "Postado por:",
+  "blog_url": "https://ruttmann.github.io",
+  "blog_prism_theme": "prism-tomorrow"
+}
